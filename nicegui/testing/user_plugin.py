@@ -24,19 +24,26 @@ from .user import User
 
 
 @pytest.fixture
-async def user(nicegui_reset_globals,  # noqa: F811, pylint: disable=unused-argument
-               caplog: pytest.LogCaptureFixture,
-               request: pytest.FixtureRequest,
-               ) -> AsyncGenerator[User, None]:
-    """Create a new user fixture."""
-    os.environ['NICEGUI_USER_SIMULATION'] = 'true'
-    try:
+def user_startup(request: pytest.FixtureRequest) -> Callable:
+    def startup():
         main_path = get_path_to_main_file(request)
         if main_path is None:
             prepare_simulation()
             ui.run(storage_secret='simulated secret')
         else:
             runpy.run_path(str(main_path), run_name='__main__')
+
+    return startup
+
+@pytest.fixture
+async def user(nicegui_reset_globals,  # noqa: F811, pylint: disable=unused-argument
+               caplog: pytest.LogCaptureFixture,
+               user_startup,
+               ) -> AsyncGenerator[User, None]:
+    """Create a new user fixture."""
+    os.environ['NICEGUI_USER_SIMULATION'] = 'true'
+    try:
+        user_startup()
 
         async with core.app.router.lifespan_context(core.app):
             async with httpx.AsyncClient(transport=httpx.ASGITransport(core.app), base_url='http://test') as client:
